@@ -25,7 +25,7 @@ regras estáticas.
 | Braços (ofertas) | Canal de contato (`contact`): **cellular** vs **telephone** — proxy real extraído do próprio dataset, sem geração de dados sintéticos |
 | Recompensa | Conversão (`y` = assinatura do depósito a prazo), 0/1 |
 | Baseline | Regra fixa: sempre recomendar o braço com melhor taxa de conversão histórica |
-| Algoritmo adaptativo | Epsilon-Greedy (contextual) |
+| Algoritmo adaptativo | Epsilon-Greedy (contextual, modelo de reward por braço) |
 | Avaliação | Taxa de conversão, comparação vs. baseline, Golden Set de 5 clientes |
 | Serviço | Script Python / API mínima (FastAPI) que recebe dados de um cliente e retorna a oferta recomendada |
 | MLOps | MLflow local (parâmetros e métricas) |
@@ -56,15 +56,16 @@ tc5/
 │   ├── raw/            # bank-additional-full.csv (não versionado)
 │   └── processed/      # arquivos gerados pelos notebooks
 ├── notebooks/
-│   ├── 01_eda.ipynb          # análise exploratória e limpeza
-│   └── 02_preparacao.ipynb   # features, braços e split treino/teste
+│   ├── 01_eda.ipynb              # análise exploratória e limpeza
+│   ├── 02_preparacao.ipynb       # features, braços e split treino/teste
+│   └── 03_baseline_bandit.ipynb  # baseline, modelo por braço e Epsilon-Greedy
 └── src/
 ```
 
 ## Como executar
 
 ```bash
-git clone <url-deste-repositorio>
+git clone https://github.com/rics81/FIAP-8MLET-TechChallenge-V
 cd tc5
 python -m venv venv
 source venv/bin/activate        # Windows: venv\Scripts\activate
@@ -79,6 +80,10 @@ Baixe o dataset `bank-additional-full.csv` (link acima) e coloque em
 2. `02_preparacao.ipynb` — define target/braço, seleciona features,
    aplica one-hot encoding e gera o split treino/teste em
    `data/processed/`.
+3. `03_baseline_bandit.ipynb` — calcula a métrica de conversão do
+   baseline (regra fixa), treina um modelo de reward (regressão logística)
+   por braço, implementa a política Epsilon-Greedy e compara as duas
+   abordagens em uma tabela.
 
 (Os notebooks seguintes serão adicionados conforme o projeto avança — ver
 roadmap abaixo.)
@@ -100,13 +105,24 @@ roadmap abaixo.)
 - **Split treino/teste** feito de forma estratificada pelo alvo (80/20,
   `random_state=42`), preservando a proporção de conversão em ambos os
   conjuntos (11,27% treino / 11,26% teste).
+- **Baseline vs. Epsilon-Greedy**: o baseline (sempre `cellular`) atingiu
+  14,88% de conversão no teste. O Epsilon-Greedy contextual (modelo de
+  reward por braço via regressão logística), avaliado por replay
+  (cobertura de ~54% do teste, já que só é possível confirmar o resultado
+  quando a escolha da política coincide com o canal realmente usado no
+  histórico), não superou o baseline nos epsilons testados — ficou entre
+  13,97% (ε=0.10) e 14,21% (ε=0.01), convergindo para perto do baseline
+  conforme a exploração diminui. Esse resultado foi mantido e registrado
+  como achado honesto, já que a comparação já cumpre o objetivo de mostrar
+  o funcionamento e a avaliação de uma política adaptativa frente a uma
+  regra fixa.
 
 ## Roadmap (etapas do desafio)
 
 - [x] Etapa 0 — Organização do projeto
 - [x] Etapa 1 — Base Kaggle e análise exploratória (EDA)
 - [x] Etapa 2 — Preparação da base (features, braços, split treino/teste)
-- [ ] Etapa 3 — Baseline e estratégia algorítmica (Epsilon-Greedy)
+- [x] Etapa 3 — Baseline e estratégia algorítmica (Epsilon-Greedy)
 - [ ] Etapa 4 — Avaliação e Golden Set
 - [ ] Etapa 5 — Serviço ou interface demonstrável
 - [ ] Etapa 6 — Arquitetura-alvo em nuvem
