@@ -176,22 +176,14 @@ balanced e Direct Method) com seus parâmetros e métricas.
   de avaliar o Epsilon-Greedy usou o método de **replay** (só confirma o
   resultado quando a escolha do bandit bate com o canal usado no
   histórico) — com ele, o adaptativo ficou **abaixo** do baseline
-  (13,97%–14,21% vs. 14,88%). Investigando a causa, identificamos que o
-  problema não era o modelo, e sim o método: o replay só cobre ~54% do
-  teste e é enviesado, porque a atribuição histórica de canal não foi
-  aleatória. A correção foi trocar para o **Direct Method** — usar a
-  própria probabilidade prevista pelos modelos como estimativa de
+  (13,97%–14,21% vs. 14,88%). Aplicando o **Direct Method**, ou seja,  
+  usar a própria probabilidade prevista pelos modelos como estimativa de
   recompensa esperada, cobrindo 100% do teste. Com essa métrica, o
   Epsilon-Greedy **supera o baseline em todos os epsilons testados**
   (lift de +0,60pp a +0,83pp, crescendo conforme epsilon cai — o
   comportamento esperado, já que uma política que só troca de braço
   quando prevê ganho não pode, em expectativa, ficar pior que a regra
-  fixa). Antes de chegar nessa correção, também testamos
-  `class_weight="balanced"` nos modelos (hipótese: desbalanceamento da
-  base prejudicando a calibração) — **piorou** o resultado, porque
-  balancear cada modelo separadamente infla artificialmente a
-  probabilidade do braço com conversão mais rara, quebrando a comparação
-  entre braços. Essa tentativa foi descartada.
+  fixa).
 - **Golden Set de 5 clientes** (amostra aleatória do teste,
   `random_state=42`): para cada cliente, a oferta recomendada foi o braço
   com maior probabilidade prevista pelos dois modelos, com justificativa
@@ -257,24 +249,4 @@ o CloudWatch).
 - [x] Etapa 5 — Serviço ou interface demonstrável
 - [x] Etapa 6 — Arquitetura-alvo em nuvem
 - [x] Etapa 7 — Ciclo de vida MLOps (MLflow)
-<<<<<<< HEAD
 - [ ] Etapa 8 — Apresentação final (Demo Day)
-
-## Considerações éticas e de dados
-
-Este projeto usa exclusivamente uma base pública e anonimizada (UCI/Kaggle
-Bank Marketing), sem dados reais de clientes, identificadores, patrimônio,
-renda ou atributos sensíveis (gênero, raça). Decisões de oferta permanecem
-como recomendação — não há automação de decisões sensíveis sem revisão
-humana.
-
-## Autor(es)
-
-_(preencher)_
-
-## Licença
-
-_(opcional — preencher se aplicável)_
-=======
-- [ ] Etapa 8 — Apresentação final (Demo Day)
->>>>>>> d8bd48e (Ajuste no README)
