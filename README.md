@@ -26,11 +26,9 @@ Uma instituição financeira digital precisa decidir, em diferentes canais,
 qual oferta, mensagem ou próximo passo apresentar para cada cliente
 elegível. Regras fixas e testes A/B longos desperdiçam tráfego, demoram a
 reagir a mudanças de contexto e dificultam a personalização responsável.
-Uma abordagem adaptativa — como **multi-armed bandit** ("bandido de
-múltiplos braços", em referência às antigas caça-níqueis de uma alavanca só)
-— permite identificar comportamentos distintos, equilibrar exploração e
-explotação, e aprender com respostas observadas sem congelar a decisão em
-regras estáticas.
+Uma abordagem adaptativa — como **multi-armed bandit** — permite identificar 
+comportamentos distintos, equilibrar exploração e explotação, e aprender com
+respostas observadas sem congelar a decisão em regras estáticas.
 
 ## Abordagem
 
@@ -89,7 +87,7 @@ tc5/
 ## Como executar
 
 ```bash
-git clone <url-deste-repositorio>
+git clone https://github.com/rics81/FIAP-8MLET-TechChallenge-V
 cd tc5
 python -m venv venv
 source venv/bin/activate        # Windows: venv\Scripts\activate
@@ -118,8 +116,6 @@ Baixe o dataset `bank-additional-full.csv` (link acima) e coloque em
    (descartado) e, por fim, do **Direct Method** — a avaliação que mostra
    o Epsilon-Greedy superando o baseline (ver seção "Principais decisões e
    achados" abaixo para o porquê de duas avaliações diferentes existirem).
-
-Depois, para subir o serviço de recomendação (Etapa 5):
 
 ```bash
 python src/train_policy.py       # treina e salva os modelos em models/ (rodar uma vez)
@@ -261,6 +257,7 @@ o CloudWatch).
 - [x] Etapa 5 — Serviço ou interface demonstrável
 - [x] Etapa 6 — Arquitetura-alvo em nuvem
 - [x] Etapa 7 — Ciclo de vida MLOps (MLflow)
+<<<<<<< HEAD
 - [ ] Etapa 8 — Apresentação final (Demo Day)
 
 ## Considerações éticas e de dados
@@ -278,3 +275,6 @@ _(preencher)_
 ## Licença
 
 _(opcional — preencher se aplicável)_
+=======
+- [ ] Etapa 8 — Apresentação final (Demo Day)
+>>>>>>> d8bd48e (Ajuste no README)
