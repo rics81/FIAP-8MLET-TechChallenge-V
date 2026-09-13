@@ -58,14 +58,15 @@ tc5/
 ├── notebooks/
 │   ├── 01_eda.ipynb              # análise exploratória e limpeza
 │   ├── 02_preparacao.ipynb       # features, braços e split treino/teste
-│   └── 03_baseline_bandit.ipynb  # baseline, modelo por braço e Epsilon-Greedy
+│   ├── 03_baseline_bandit.ipynb  # baseline, modelo por braço e Epsilon-Greedy
+│   └── 04_avaliacao.ipynb        # golden set com oferta recomendada e justificativa
 └── src/
 ```
 
 ## Como executar
 
 ```bash
-git clone https://github.com/rics81/FIAP-8MLET-TechChallenge-V
+git clone <url-deste-repositorio>
 cd tc5
 python -m venv venv
 source venv/bin/activate        # Windows: venv\Scripts\activate
@@ -84,6 +85,10 @@ Baixe o dataset `bank-additional-full.csv` (link acima) e coloque em
    baseline (regra fixa), treina um modelo de reward (regressão logística)
    por braço, implementa a política Epsilon-Greedy e compara as duas
    abordagens em uma tabela.
+4. `04_avaliacao.ipynb` — retreina os modelos por braço, seleciona um
+   Golden Set de 5 clientes do teste e gera, para cada um, a oferta
+   recomendada com justificativa, salvando o resultado em
+   `data/processed/golden_set.csv`.
 
 (Os notebooks seguintes serão adicionados conforme o projeto avança — ver
 roadmap abaixo.)
@@ -116,6 +121,15 @@ roadmap abaixo.)
   como achado honesto, já que a comparação já cumpre o objetivo de mostrar
   o funcionamento e a avaliação de uma política adaptativa frente a uma
   regra fixa.
+- **Golden Set de 5 clientes** (amostra aleatória do teste,
+  `random_state=42`): para cada cliente, a oferta recomendada foi o braço
+  com maior probabilidade prevista pelos dois modelos, com justificativa
+  baseada na diferença entre essas probabilidades. Em 2 dos 5 casos a
+  recomendação coincidiu com o canal usado no histórico — divergir nos
+  outros 3 é esperado, já que a política adaptativa busca melhorar a
+  decisão, não repetir o histórico. Nenhum dos 5 clientes converteu de
+  fato, o que é consistente com as probabilidades previstas baixas
+  (3–19%) e a taxa base de conversão de ~11% da base inteira.
 
 ## Roadmap (etapas do desafio)
 
@@ -123,16 +137,8 @@ roadmap abaixo.)
 - [x] Etapa 1 — Base Kaggle e análise exploratória (EDA)
 - [x] Etapa 2 — Preparação da base (features, braços, split treino/teste)
 - [x] Etapa 3 — Baseline e estratégia algorítmica (Epsilon-Greedy)
-- [ ] Etapa 4 — Avaliação e Golden Set
+- [x] Etapa 4 — Avaliação e Golden Set
 - [ ] Etapa 5 — Serviço ou interface demonstrável
 - [ ] Etapa 6 — Arquitetura-alvo em nuvem
 - [ ] Etapa 7 — Ciclo de vida MLOps (MLflow)
 - [ ] Etapa 8 — Apresentação final (Demo Day)
-
-## Considerações éticas e de dados
-
-Este projeto usa exclusivamente uma base pública e anonimizada (UCI/Kaggle
-Bank Marketing), sem dados reais de clientes, identificadores, patrimônio,
-renda ou atributos sensíveis (gênero, raça). Decisões de oferta permanecem
-como recomendação — não há automação de decisões sensíveis sem revisão
-humana.
