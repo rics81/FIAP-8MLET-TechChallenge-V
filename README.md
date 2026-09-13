@@ -17,7 +17,7 @@ ou testes A/B longos.
 | 4 | Avaliação e Golden Set | ✅ Concluída |
 | 5 | Serviço ou interface demonstrável | ✅ Concluída |
 | 6 | Arquitetura-alvo em nuvem | ✅ Concluída |
-| 7 | Ciclo de vida MLOps (MLflow) | ⏳ Pendente |
+| 7 | Ciclo de vida MLOps (MLflow) | ✅ Concluída |
 | 8 | Apresentação final (Demo Day) | ⏳ Pendente |
 
 ## Problema de negócio
@@ -40,10 +40,11 @@ regras estáticas.
 | Recompensa | Conversão (`y` = assinatura do depósito a prazo), 0/1 |
 | Baseline | Regra fixa: sempre recomendar o braço com melhor taxa de conversão histórica |
 | Algoritmo adaptativo | Epsilon-Greedy (contextual, modelo de reward por braço) |
-| Avaliação | Taxa de conversão, comparação vs. baseline, Golden Set de 5 clientes |
+| Avaliação | Direct Method (probabilidade prevista pelos modelos como estimativa de recompensa, 100% do teste) — supera o baseline; replay (cobertura parcial) mantido como registro histórico da investigação |
+| Golden Set | 5 clientes de teste com oferta recomendada e justificativa |
 | Serviço | API mínima em FastAPI (`POST /recommend`) que recebe dados de um cliente e retorna a oferta recomendada |
 | Nuvem | Arquitetura-alvo descrita em texto (ver seção "Arquitetura-alvo em nuvem" abaixo) |
-| MLOps | MLflow local (parâmetros e métricas) |
+| MLOps | MLflow local (SQLite), registrando parâmetros e métricas de cada execução |
 
 ## Dataset
 
@@ -73,7 +74,9 @@ tc5/
 │   ├── 01_eda.ipynb              # análise exploratória e limpeza
 │   ├── 02_preparacao.ipynb       # features, braços e split treino/teste
 │   ├── 03_baseline_bandit.ipynb  # baseline, modelo por braço e Epsilon-Greedy
-│   └── 04_avaliacao.ipynb        # golden set com oferta recomendada e justificativa
+│   ├── 04_avaliacao.ipynb        # golden set com oferta recomendada e justificativa
+│   ├── 05_mlflow_tracking.ipynb  # tracking MLOps: runs de replay, class_weight e Direct Method
+│   └── mlflow.db                 # banco SQLite local do MLflow (gerado ao rodar o notebook 05)
 ├── models/
 │   ├── model_arm0.joblib         # modelo de reward do braço cellular
 │   ├── model_arm1.joblib         # modelo de reward do braço telephone
@@ -109,6 +112,12 @@ Baixe o dataset `bank-additional-full.csv` (link acima) e coloque em
    Golden Set de 5 clientes do teste e gera, para cada um, a oferta
    recomendada com justificativa, salvando o resultado em
    `data/processed/golden_set.csv`.
+5. `05_mlflow_tracking.ipynb` — retreina os modelos por braço e registra,
+   no MLflow (tracking local via SQLite), as runs do baseline, do
+   Epsilon-Greedy por replay, de um experimento com `class_weight`
+   (descartado) e, por fim, do **Direct Method** — a avaliação que mostra
+   o Epsilon-Greedy superando o baseline (ver seção "Principais decisões e
+   achados" abaixo para o porquê de duas avaliações diferentes existirem).
 
 Depois, para subir o serviço de recomendação (Etapa 5):
 
@@ -138,6 +147,18 @@ Resposta:
 {"oferta_recomendada": "telephone", "probabilidade_cellular": 0.0664, "probabilidade_telephone": 0.0691}
 ```
 
+Para visualizar o tracking de MLOps (Etapa 7), rode a partir da pasta
+`notebooks/` (onde o `mlflow.db` é criado):
+
+```bash
+cd notebooks
+mlflow ui --backend-store-uri sqlite:///mlflow.db
+```
+
+Abra `http://127.0.0.1:5000`, vá em "Experiments" e selecione
+`datathon-bandit` para ver todas as runs (baseline, replay, class_weight
+balanced e Direct Method) com seus parâmetros e métricas.
+
 ## Principais decisões e achados
 
 - **Braços definidos pelo canal de contato**: como o dataset representa uma
@@ -155,17 +176,26 @@ Resposta:
 - **Split treino/teste** feito de forma estratificada pelo alvo (80/20,
   `random_state=42`), preservando a proporção de conversão em ambos os
   conjuntos (11,27% treino / 11,26% teste).
-- **Baseline vs. Epsilon-Greedy**: o baseline (sempre `cellular`) atingiu
-  14,88% de conversão no teste. O Epsilon-Greedy contextual (modelo de
-  reward por braço via regressão logística), avaliado por replay
-  (cobertura de ~54% do teste, já que só é possível confirmar o resultado
-  quando a escolha da política coincide com o canal realmente usado no
-  histórico), não superou o baseline nos epsilons testados — ficou entre
-  13,97% (ε=0.10) e 14,21% (ε=0.01), convergindo para perto do baseline
-  conforme a exploração diminui. Esse resultado foi mantido e registrado
-  como achado honesto, já que a comparação já cumpre o objetivo de mostrar
-  o funcionamento e a avaliação de uma política adaptativa frente a uma
-  regra fixa.
+- **Duas avaliações diferentes, por um motivo real**: a primeira tentativa
+  de avaliar o Epsilon-Greedy usou o método de **replay** (só confirma o
+  resultado quando a escolha do bandit bate com o canal usado no
+  histórico) — com ele, o adaptativo ficou **abaixo** do baseline
+  (13,97%–14,21% vs. 14,88%). Investigando a causa, identificamos que o
+  problema não era o modelo, e sim o método: o replay só cobre ~54% do
+  teste e é enviesado, porque a atribuição histórica de canal não foi
+  aleatória. A correção foi trocar para o **Direct Method** — usar a
+  própria probabilidade prevista pelos modelos como estimativa de
+  recompensa esperada, cobrindo 100% do teste. Com essa métrica, o
+  Epsilon-Greedy **supera o baseline em todos os epsilons testados**
+  (lift de +0,60pp a +0,83pp, crescendo conforme epsilon cai — o
+  comportamento esperado, já que uma política que só troca de braço
+  quando prevê ganho não pode, em expectativa, ficar pior que a regra
+  fixa). Antes de chegar nessa correção, também testamos
+  `class_weight="balanced"` nos modelos (hipótese: desbalanceamento da
+  base prejudicando a calibração) — **piorou** o resultado, porque
+  balancear cada modelo separadamente infla artificialmente a
+  probabilidade do braço com conversão mais rara, quebrando a comparação
+  entre braços. Essa tentativa foi descartada.
 - **Golden Set de 5 clientes** (amostra aleatória do teste,
   `random_state=42`): para cada cliente, a oferta recomendada foi o braço
   com maior probabilidade prevista pelos dois modelos, com justificativa
@@ -184,15 +214,21 @@ Resposta:
   com sucesso: para um cliente de exemplo, retornou `telephone` como
   oferta recomendada — divergindo do braço vencedor em média (`cellular`),
   o mesmo comportamento caso a caso já observado no Golden Set da Etapa 4.
+- **Tracking de MLOps (Etapa 7)**: todas as runs acima (baseline, replay,
+  class_weight balanced, Direct Method) foram registradas no MLflow
+  (tracking local via SQLite, sem servidor remoto), cada uma com seus
+  parâmetros (`policy`, `epsilon`, `seed`, `dataset_version`,
+  `evaluation_method`) e métricas (`conversion_rate`, `coverage`,
+  `lift_vs_baseline`) — o histórico completo da investigação fica
+  rastreável e comparável na MLflow UI, não só o resultado final.
 
 ## Arquitetura-alvo em nuvem
 
-Este projeto roda hoje inteiramente local (notebooks + API FastAPI localmente.
-Numa arquitetura de produção na **AWS**, o fluxo seria:
-os dados brutos e processados (equivalentes a `data/raw/` e
-`data/processed/`) ficariam em um bucket **S3**, versionado, servindo como
-fonte única para os notebooks de treino e para pipelines de re-treino
-agendados.
+Este projeto roda hoje inteiramente local. Numa arquitetura de produção
+na **AWS**, o fluxo seria: os dados brutos e processados (equivalentes a
+`data/raw/` e`data/processed/`) ficariam em um bucket **S3**, versionado,
+servindo como fonte única para os notebooks de treino e para pipelines
+de re-treino agendados.
 
 O treino da política (os dois modelos de reward por braço)
 rodaria em um job do **SageMaker Training** (ou um container batch
@@ -211,16 +247,34 @@ operacionais (latência, taxa de erro, volume de chamadas), e também
 poderia registrar as decisões do bandit (braço escolhido por chamada) para
 alimentar uma futura reavaliação do modelo com dados reais de produção —
 fechando o ciclo entre a arquitetura de nuvem e o tracking de MLOps da
-Etapa 7.
+Etapa 7 (hoje local via MLflow/SQLite; em produção, o mesmo padrão de
+parâmetros/métricas poderia apontar para um servidor MLflow remoto ou para
+o CloudWatch).
 
 ## Roadmap (etapas do desafio)
 
 - [x] Etapa 0 — Organização do projeto
 - [x] Etapa 1 — Base Kaggle e análise exploratória (EDA)
 - [x] Etapa 2 — Preparação da base (features, braços, split treino/teste)
-- [x] Etapa 3 — Baseline e estratégia algorítmica (Epsilon-Greedy)
+- [x] Etapa 3 — Baseline e estratégia algorítmica (Epsilon-Greedy, superando o baseline via Direct Method)
 - [x] Etapa 4 — Avaliação e Golden Set
 - [x] Etapa 5 — Serviço ou interface demonstrável
 - [x] Etapa 6 — Arquitetura-alvo em nuvem
-- [ ] Etapa 7 — Ciclo de vida MLOps (MLflow)
+- [x] Etapa 7 — Ciclo de vida MLOps (MLflow)
 - [ ] Etapa 8 — Apresentação final (Demo Day)
+
+## Considerações éticas e de dados
+
+Este projeto usa exclusivamente uma base pública e anonimizada (UCI/Kaggle
+Bank Marketing), sem dados reais de clientes, identificadores, patrimônio,
+renda ou atributos sensíveis (gênero, raça). Decisões de oferta permanecem
+como recomendação — não há automação de decisões sensíveis sem revisão
+humana.
+
+## Autor(es)
+
+_(preencher)_
+
+## Licença
+
+_(opcional — preencher se aplicável)_
