@@ -6,6 +6,20 @@ plataforma de experimentação adaptativa que decide qual oferta apresentar a
 um cliente de uma instituição financeira digital, no lugar de regras fixas
 ou testes A/B longos.
 
+## Status atual
+
+| Etapa | Descrição | Status |
+|---|---|---|
+| 0 | Organização do projeto | ✅ Concluída |
+| 1 | Base Kaggle e EDA | ✅ Concluída |
+| 2 | Preparação da base | ✅ Concluída |
+| 3 | Baseline e estratégia algorítmica | ✅ Concluída |
+| 4 | Avaliação e Golden Set | ✅ Concluída |
+| 5 | Serviço ou interface demonstrável | ✅ Concluída |
+| 6 | Arquitetura-alvo em nuvem | ✅ Concluída |
+| 7 | Ciclo de vida MLOps (MLflow) | ⏳ Pendente |
+| 8 | Apresentação final (Demo Day) | ⏳ Pendente |
+
 ## Problema de negócio
 
 Uma instituição financeira digital precisa decidir, em diferentes canais,
@@ -27,9 +41,9 @@ regras estáticas.
 | Baseline | Regra fixa: sempre recomendar o braço com melhor taxa de conversão histórica |
 | Algoritmo adaptativo | Epsilon-Greedy (contextual, modelo de reward por braço) |
 | Avaliação | Taxa de conversão, comparação vs. baseline, Golden Set de 5 clientes |
-| Serviço | Script Python / API mínima (FastAPI) que recebe dados de um cliente e retorna a oferta recomendada |
+| Serviço | API mínima em FastAPI (`POST /recommend`) que recebe dados de um cliente e retorna a oferta recomendada |
+| Nuvem | Arquitetura-alvo descrita em texto (ver seção "Arquitetura-alvo em nuvem" abaixo) |
 | MLOps | MLflow local (parâmetros e métricas) |
-| Nuvem | Arquitetura-alvo descrita em texto (ver seção abaixo, a preencher na Etapa 6) |
 
 ## Dataset
 
@@ -60,7 +74,13 @@ tc5/
 │   ├── 02_preparacao.ipynb       # features, braços e split treino/teste
 │   ├── 03_baseline_bandit.ipynb  # baseline, modelo por braço e Epsilon-Greedy
 │   └── 04_avaliacao.ipynb        # golden set com oferta recomendada e justificativa
+├── models/
+│   ├── model_arm0.joblib         # modelo de reward do braço cellular
+│   ├── model_arm1.joblib         # modelo de reward do braço telephone
+│   └── columns.json              # colunas de X_train, usadas para reindexar a entrada da API
 └── src/
+    ├── train_policy.py           # treina e salva os dois modelos por braço
+    └── api.py                    # API FastAPI (POST /recommend)
 ```
 
 ## Como executar
@@ -90,8 +110,33 @@ Baixe o dataset `bank-additional-full.csv` (link acima) e coloque em
    recomendada com justificativa, salvando o resultado em
    `data/processed/golden_set.csv`.
 
-(Os notebooks seguintes serão adicionados conforme o projeto avança — ver
-roadmap abaixo.)
+Depois, para subir o serviço de recomendação (Etapa 5):
+
+```bash
+python src/train_policy.py       # treina e salva os modelos em models/ (rodar uma vez)
+uvicorn src.api:app --reload     # sobe a API em http://127.0.0.1:8000
+```
+
+Exemplo de chamada:
+
+```bash
+curl -X POST http://127.0.0.1:8000/recommend \
+  -H "Content-Type: application/json" \
+  -d '{
+    "age": 35, "job": "technician", "marital": "married",
+    "education": "university.degree", "default": "no", "housing": "yes",
+    "loan": "no", "month": "may", "day_of_week": "mon", "campaign": 1,
+    "pdays": 999, "previous": 0, "poutcome": "nonexistent",
+    "emp_var_rate": 1.1, "cons_price_idx": 93.994, "cons_conf_idx": -36.4,
+    "euribor3m": 4.857, "nr_employed": 5191.0
+  }'
+```
+
+Resposta:
+
+```json
+{"oferta_recomendada": "telephone", "probabilidade_cellular": 0.0664, "probabilidade_telephone": 0.0691}
+```
 
 ## Principais decisões e achados
 
@@ -130,6 +175,43 @@ roadmap abaixo.)
   decisão, não repetir o histórico. Nenhum dos 5 clientes converteu de
   fato, o que é consistente com as probabilidades previstas baixas
   (3–19%) e a taxa base de conversão de ~11% da base inteira.
+- **Serviço demonstrável (Etapa 5)**: a política treinada foi exposta como
+  uma API FastAPI (`POST /recommend`). Os dois modelos por braço são
+  treinados uma única vez (`src/train_policy.py`) e salvos em `models/`
+  (junto com a lista de colunas usada no treino); a API só carrega esses
+  artefatos e monta o vetor de entrada a partir dos dados "crus" do
+  cliente, sem precisar retreinar nada a cada chamada. Testada localmente
+  com sucesso: para um cliente de exemplo, retornou `telephone` como
+  oferta recomendada — divergindo do braço vencedor em média (`cellular`),
+  o mesmo comportamento caso a caso já observado no Golden Set da Etapa 4.
+
+## Arquitetura-alvo em nuvem
+
+Este projeto roda hoje inteiramente local (notebooks + API FastAPI localmente.
+Numa arquitetura de produção na **AWS**, o fluxo seria:
+os dados brutos e processados (equivalentes a `data/raw/` e
+`data/processed/`) ficariam em um bucket **S3**, versionado, servindo como
+fonte única para os notebooks de treino e para pipelines de re-treino
+agendados.
+
+O treino da política (os dois modelos de reward por braço)
+rodaria em um job do **SageMaker Training** (ou um container batch
+simples), com os artefatos (`model_arm0.joblib`, `model_arm1.joblib`,
+`columns.json`) publicados em outro bucket S3 versionado, funcionando como
+um registro de modelos mínimo.
+
+Para servir as recomendações, o endpoint FastAPI atual (`src/api.py`) seria
+empacotado em um container e implantado como uma função **AWS Lambda** (ou
+um **SageMaker Endpoint**, se a latência/escala exigir algo mais robusto),
+exposto ao mundo através do **API Gateway** — mantendo a mesma rota
+`POST /recommend`.
+
+O **CloudWatch** cuidaria de logs e métricas
+operacionais (latência, taxa de erro, volume de chamadas), e também
+poderia registrar as decisões do bandit (braço escolhido por chamada) para
+alimentar uma futura reavaliação do modelo com dados reais de produção —
+fechando o ciclo entre a arquitetura de nuvem e o tracking de MLOps da
+Etapa 7.
 
 ## Roadmap (etapas do desafio)
 
@@ -138,7 +220,7 @@ roadmap abaixo.)
 - [x] Etapa 2 — Preparação da base (features, braços, split treino/teste)
 - [x] Etapa 3 — Baseline e estratégia algorítmica (Epsilon-Greedy)
 - [x] Etapa 4 — Avaliação e Golden Set
-- [ ] Etapa 5 — Serviço ou interface demonstrável
-- [ ] Etapa 6 — Arquitetura-alvo em nuvem
+- [x] Etapa 5 — Serviço ou interface demonstrável
+- [x] Etapa 6 — Arquitetura-alvo em nuvem
 - [ ] Etapa 7 — Ciclo de vida MLOps (MLflow)
 - [ ] Etapa 8 — Apresentação final (Demo Day)
