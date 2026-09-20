@@ -18,7 +18,7 @@ ou testes A/B longos.
 | 5 | Serviço ou interface demonstrável | ✅ Concluída |
 | 6 | Arquitetura-alvo em nuvem | ✅ Concluída |
 | 7 | Ciclo de vida MLOps (MLflow) | ✅ Concluída |
-| 8 | Apresentação final (Demo Day) | ⏳ Pendente |
+| 8 | Apresentação final (Demo Day) | ✅ Concluída |
 
 ## Problema de negócio
 
@@ -249,4 +249,4 @@ o CloudWatch).
 - [x] Etapa 5 — Serviço ou interface demonstrável
 - [x] Etapa 6 — Arquitetura-alvo em nuvem
 - [x] Etapa 7 — Ciclo de vida MLOps (MLflow)
-- [ ] Etapa 8 — Apresentação final (Demo Day)
+- [x] Etapa 8 — Apresentação final (Demo Day)
